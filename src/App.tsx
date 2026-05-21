@@ -14,6 +14,8 @@ import { MessageBubble } from './components/MessageBubble'
 import { ChatInput } from './components/ChatInput'
 import { EmptyState } from './components/EmptyState'
 
+type SessionBusy = 'searching' | 'streaming'
+
 function uid() {
   return crypto.randomUUID()
 }
@@ -40,14 +42,30 @@ export default function App() {
   const [sessions, setSessions] = useState<ChatSession[]>(() => loadSessions())
   const [activeId, setActiveId] = useState<string | null>(() => loadActiveId())
   const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [searching, setSearching] = useState(false)
-  const abortRef = useRef<AbortController | null>(null)
+  const [sessionBusy, setSessionBusy] = useState<Record<string, SessionBusy>>({})
+  const abortBySession = useRef<Map<string, AbortController>>(new Map())
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const activeSession = sessions.find((s) => s.id === activeId) ?? null
+  const activeBusy = activeId ? sessionBusy[activeId] : undefined
+
+  const setBusy = useCallback((sessionId: string, state: SessionBusy | null) => {
+    setSessionBusy((prev) => {
+      const next = { ...prev }
+      if (state) next[sessionId] = state
+      else delete next[sessionId]
+      return next
+    })
+  }, [])
+
+  const beginAbort = useCallback((sessionId: string) => {
+    abortBySession.current.get(sessionId)?.abort()
+    const ac = new AbortController()
+    abortBySession.current.set(sessionId, ac)
+    return ac
+  }, [])
 
   useEffect(() => {
     saveSessions(sessions)
@@ -59,7 +77,7 @@ export default function App() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [activeSession?.messages, loading])
+  }, [activeSession?.messages, activeBusy])
 
   const updateSession = useCallback(
     (id: string, updater: (s: ChatSession) => ChatSession) => {
@@ -83,6 +101,9 @@ export default function App() {
   }
 
   const handleDelete = (id: string) => {
+    abortBySession.current.get(id)?.abort()
+    abortBySession.current.delete(id)
+    setBusy(id, null)
     setSessions((prev) => {
       const next = prev.filter((s) => s.id !== id)
       if (activeId === id) {
@@ -123,10 +144,11 @@ export default function App() {
   }
 
   const resolveMessagesForApi = async (
+    sessionId: string,
     history: Message[],
     userContent: string,
     webSearch: boolean,
-    signal?: AbortSignal
+    signal: AbortSignal
   ): Promise<Message[]> => {
     if (!webSearch) {
       return [...history, { id: uid(), role: 'user', content: userContent }]
@@ -135,7 +157,7 @@ export default function App() {
     const bochaErr = checkBochaKey()
     if (bochaErr) throw new Error(bochaErr)
 
-    setSearching(true)
+    setBusy(sessionId, 'searching')
     try {
       const hits = await bochaWebSearch(userContent, signal)
       const context = formatSearchContext(hits)
@@ -150,7 +172,7 @@ export default function App() {
         content: m.content,
       }))
     } finally {
-      setSearching(false)
+      setBusy(sessionId, null)
     }
   }
 
@@ -158,11 +180,10 @@ export default function App() {
     sessionId: string,
     history: Message[],
     provider: Provider,
-    assistantId: string
+    assistantId: string,
+    signal: AbortSignal
   ) => {
-    abortRef.current?.abort()
-    abortRef.current = new AbortController()
-
+    setBusy(sessionId, 'streaming')
     try {
       await streamChat(
         provider,
@@ -176,7 +197,7 @@ export default function App() {
             updatedAt: Date.now(),
           }))
         },
-        abortRef.current.signal
+        signal
       )
     } catch (e) {
       if ((e as Error).name === 'AbortError') return
@@ -188,12 +209,12 @@ export default function App() {
       }))
       throw e
     } finally {
-      abortRef.current = null
+      setBusy(sessionId, null)
     }
   }
 
   const handleRegenerate = async (assistantMsgId: string) => {
-    if (loading || !activeId || !activeSession) return
+    if (!activeId || !activeSession || activeBusy) return
 
     const idx = activeSession.messages.findIndex((m) => m.id === assistantMsgId)
     if (idx < 0 || activeSession.messages[idx].role !== 'assistant') return
@@ -210,10 +231,7 @@ export default function App() {
     }
 
     setError(null)
-    setLoading(true)
-
-    abortRef.current?.abort()
-    abortRef.current = new AbortController()
+    const signal = beginAbort(activeId).signal
 
     const newAssistantId = uid()
     updateSession(activeId, (s) => ({
@@ -225,25 +243,29 @@ export default function App() {
     try {
       const userContent = last.content
       const msgsForApi = await resolveMessagesForApi(
+        activeId,
         history.slice(0, -1),
         userContent,
         activeSession.webSearch,
-        abortRef.current.signal
+        signal
       )
-      await streamAssistantReply(activeId, msgsForApi, provider, newAssistantId)
+      await streamAssistantReply(
+        activeId,
+        msgsForApi,
+        provider,
+        newAssistantId,
+        signal
+      )
     } catch (e) {
       if ((e as Error).name !== 'AbortError' && e instanceof Error) {
         setError(e.message)
       }
-    } finally {
-      setLoading(false)
-      setSearching(false)
     }
   }
 
   const sendMessage = async (text: string) => {
     const trimmed = text.trim()
-    if (!trimmed || loading) return
+    if (!trimmed) return
 
     let sessionId = activeId
     let session = activeSession
@@ -256,6 +278,8 @@ export default function App() {
       session = s
     }
 
+    if (sessionBusy[sessionId!]) return
+
     const provider = session!.provider
     const keyErr = checkApiKey(provider)
     if (keyErr) {
@@ -265,7 +289,6 @@ export default function App() {
 
     setError(null)
     setInput('')
-    setLoading(true)
 
     const userMsg: Message = { id: uid(), role: 'user', content: trimmed }
     const assistantId = uid()
@@ -284,28 +307,34 @@ export default function App() {
       }
     })
 
-    abortRef.current?.abort()
-    abortRef.current = new AbortController()
+    const signal = beginAbort(sessionId!).signal
 
     try {
       const msgsForApi = await resolveMessagesForApi(
+        sessionId!,
         session!.messages,
         trimmed,
         session!.webSearch,
-        abortRef.current.signal
+        signal
       )
-      await streamAssistantReply(sessionId!, msgsForApi, provider, assistantId)
+      await streamAssistantReply(
+        sessionId!,
+        msgsForApi,
+        provider,
+        assistantId,
+        signal
+      )
     } catch (e) {
-      if ((e as Error).name === 'AbortError') return
+      if ((e as Error).name === 'AbortError') {
+        setBusy(sessionId!, null)
+        return
+      }
       if (e instanceof Error) setError(e.message)
-    } finally {
-      setLoading(false)
-      setSearching(false)
     }
   }
 
   const messages = activeSession?.messages ?? []
-  const showEmpty = messages.length === 0 && !loading
+  const showEmpty = messages.length === 0 && !activeBusy
 
   return (
     <div className="flex h-full bg-[#212121] text-[#ececec]">
@@ -356,21 +385,21 @@ export default function App() {
                 const showActions =
                   m.role === 'assistant' &&
                   m.content.trim().length > 0 &&
-                  !(loading && isLast)
+                  !(activeBusy && isLast)
 
                 return (
                   <MessageBubble
                     key={m.id}
                     message={m}
                     showActions={showActions}
-                    actionsDisabled={loading}
+                    actionsDisabled={!!activeBusy}
                     onRegenerate={() => handleRegenerate(m.id)}
                   />
                 )
               })}
-              {(searching || loading) && (
+              {activeBusy && (
                 <div className="px-4 py-2 text-sm text-[#8e8e8e] animate-pulse">
-                  {searching ? '正在联网搜索…' : '正在思考…'}
+                  {activeBusy === 'searching' ? '正在联网搜索…' : '正在思考…'}
                 </div>
               )}
               <div ref={bottomRef} />
@@ -380,7 +409,7 @@ export default function App() {
 
         <ChatInput
           value={input}
-          disabled={loading || searching}
+          sendDisabled={!!activeBusy}
           webSearch={activeSession?.webSearch ?? false}
           onWebSearchChange={handleWebSearchChange}
           onChange={setInput}

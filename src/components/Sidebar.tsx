@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChatSession } from '../types'
+import { SessionMenu } from './SessionMenu'
 
 interface SidebarProps {
   sessions: ChatSession[]
@@ -58,7 +59,11 @@ export function Sidebar({
   const [searchQuery, setSearchQuery] = useState('')
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
-  const [menuId, setMenuId] = useState<string | null>(null)
+  const [menuAnchor, setMenuAnchor] = useState<{
+    sessionId: string
+    top: number
+    left: number
+  } | null>(null)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dropIndex, setDropIndex] = useState<number | null>(null)
   const renameRef = useRef<HTMLInputElement>(null)
@@ -77,8 +82,13 @@ export function Sidebar({
     }
   }, [renamingId])
 
+  const openMenu = (sessionId: string, el: HTMLElement) => {
+    const rect = el.getBoundingClientRect()
+    setMenuAnchor({ sessionId, top: rect.top, left: rect.right })
+  }
+
   const startRename = (s: ChatSession) => {
-    setMenuId(null)
+    setMenuAnchor(null)
     setRenamingId(s.id)
     setRenameValue(s.title || '新对话')
   }
@@ -236,7 +246,7 @@ export function Sidebar({
                         onClick={() => {
                           onSelect(s.id)
                           onCloseMobile()
-                          setMenuId(null)
+                          setMenuAnchor(null)
                         }}
                       >
                         <span
@@ -251,40 +261,15 @@ export function Sidebar({
                         aria-label="更多操作"
                         onClick={(e) => {
                           e.stopPropagation()
-                          setMenuId(menuId === s.id ? null : s.id)
+                          if (menuAnchor?.sessionId === s.id) {
+                            setMenuAnchor(null)
+                          } else {
+                            openMenu(s.id, e.currentTarget)
+                          }
                         }}
                       >
                         ⋯
                       </button>
-                      {menuId === s.id && (
-                        <>
-                          <button
-                            type="button"
-                            className="fixed inset-0 z-10"
-                            aria-label="关闭菜单"
-                            onClick={() => setMenuId(null)}
-                          />
-                          <div className="absolute right-0 top-full z-20 mt-1 min-w-[120px] rounded-lg border border-[#3a3a3a] bg-[#2f2f2f] py-1 shadow-xl">
-                            <button
-                              type="button"
-                              className="block w-full px-3 py-2 text-left text-sm text-[#ececec] hover:bg-[#3a3a3a] transition-colors duration-200"
-                              onClick={() => startRename(s)}
-                            >
-                              重命名
-                            </button>
-                            <button
-                              type="button"
-                              className="block w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-[#3a3a3a] transition-colors duration-200"
-                              onClick={() => {
-                                setMenuId(null)
-                                onDelete(s.id)
-                              }}
-                            >
-                              删除
-                            </button>
-                          </div>
-                        </>
-                      )}
                     </div>
                   )}
                 </li>
@@ -297,6 +282,22 @@ export function Sidebar({
           InterSense · 多模型对话
         </div>
       </aside>
+
+      {menuAnchor && (() => {
+        const target = sessions.find((x) => x.id === menuAnchor.sessionId)
+        if (!target) return null
+        return (
+          <SessionMenu
+            anchor={{ top: menuAnchor.top, left: menuAnchor.left }}
+            onClose={() => setMenuAnchor(null)}
+            onRename={() => startRename(target)}
+            onDelete={() => {
+              setMenuAnchor(null)
+              onDelete(target.id)
+            }}
+          />
+        )
+      })()}
     </>
   )
 }
