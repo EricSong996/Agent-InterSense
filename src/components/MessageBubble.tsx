@@ -39,6 +39,7 @@ export function MessageBubble({
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false)
   const isUser = message.role === 'user'
+  const images = message.images ?? []
 
   const handleCopy = async () => {
     if (!message.content.trim()) return
@@ -55,8 +56,29 @@ export function MessageBubble({
   if (isUser) {
     return (
       <div className="flex justify-end px-4 py-3">
-        <div className="max-w-[85%] rounded-2xl bg-[#2f2f2f] px-4 py-2.5 text-[15px] leading-relaxed text-[#ececec] whitespace-pre-wrap">
-          {message.content}
+        <div className="max-w-[85%] rounded-2xl bg-[#2f2f2f] px-4 py-2.5 text-[15px] leading-relaxed text-[#ececec]">
+          {images.length > 0 && (
+            <div className={`flex flex-wrap gap-2 ${message.content.trim() ? 'mb-2.5' : ''}`}>
+              {images.map((img) => (
+                <a
+                  key={img.id}
+                  href={img.dataUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block overflow-hidden rounded-lg border border-[#4a4a4a]"
+                >
+                  <img
+                    src={img.dataUrl}
+                    alt=""
+                    className="max-h-48 max-w-full object-contain"
+                  />
+                </a>
+              ))}
+            </div>
+          )}
+          {message.content.trim() ? (
+            <span className="whitespace-pre-wrap">{message.content}</span>
+          ) : null}
         </div>
       </div>
     )

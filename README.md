@@ -31,10 +31,8 @@ bocha: {
 ```
 
 ```ts
-deepseek: {
-  apiKey: '你的 DeepSeek Key',
-  model: 'deepseek-chat',
-},
+'deepseek-v4-flash': { apiKey: '你的 DeepSeek Key', model: 'deepseek-v4-flash', ... },
+'deepseek-v4-pro': { apiKey: '你的 DeepSeek Key', model: 'deepseek-v4-pro', ... },
 doubao: {
   apiKey: '你的火山方舟 Key',
   model: '你的推理接入点 ID',  // 在火山方舟控制台创建

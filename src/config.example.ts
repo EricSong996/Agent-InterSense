@@ -2,16 +2,32 @@
  * 复制本文件为 config.ts 并填写 Key：
  *   copy config.example.ts config.ts   (Windows PowerShell)
  */
+const DEEPSEEK_SHARED = {
+  apiKey: 'YOUR_DEEPSEEK_API_KEY',
+  baseUrl: 'https://api.deepseek.com',
+} as const
+
+const DOUBAO_SHARED = {
+  apiKey: 'YOUR_DOUBAO_API_KEY',
+  baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+} as const
+
 export const CONFIG = {
-  deepseek: {
-    apiKey: 'YOUR_DEEPSEEK_API_KEY',
-    baseUrl: 'https://api.deepseek.com',
-    model: 'deepseek-chat',
+  'deepseek-v4-flash': {
+    ...DEEPSEEK_SHARED,
+    model: 'deepseek-v4-flash',
+  },
+  'deepseek-v4-pro': {
+    ...DEEPSEEK_SHARED,
+    model: 'deepseek-v4-pro',
   },
   doubao: {
-    apiKey: 'YOUR_DOUBAO_API_KEY',
-    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
-    model: 'YOUR_ENDPOINT_ID',
+    ...DOUBAO_SHARED,
+    model: 'YOUR_LITE_ENDPOINT_ID',
+  },
+  'doubao-seed-2-pro': {
+    ...DOUBAO_SHARED,
+    model: 'YOUR_PRO_ENDPOINT_ID',
   },
   bocha: {
     apiKey: 'YOUR_BOCHA_API_KEY',
@@ -26,7 +42,11 @@ export const CONFIG = {
   },
 } as const
 
-export type Provider = 'deepseek' | 'doubao'
+export type Provider =
+  | 'deepseek-v4-flash'
+  | 'deepseek-v4-pro'
+  | 'doubao'
+  | 'doubao-seed-2-pro'
 
 export interface ProviderMeta {
   id: Provider
@@ -38,17 +58,31 @@ export interface ProviderMeta {
 
 export const PROVIDER_META: ProviderMeta[] = [
   {
-    id: 'deepseek',
+    id: 'deepseek-v4-flash',
     shortLabel: 'DeepSeek',
-    fullName: 'DeepSeek Chat',
-    modelId: 'deepseek-chat',
+    fullName: 'DeepSeek V4 Flash',
+    modelId: 'deepseek-v4-flash',
+    vendor: '深度求索 DeepSeek',
+  },
+  {
+    id: 'deepseek-v4-pro',
+    shortLabel: 'DeepSeek',
+    fullName: 'DeepSeek V4 Pro',
+    modelId: 'deepseek-v4-pro',
     vendor: '深度求索 DeepSeek',
   },
   {
     id: 'doubao',
     shortLabel: '豆包',
     fullName: 'Doubao-Seed-2.0-lite',
-    modelId: 'YOUR_ENDPOINT_ID',
+    modelId: 'YOUR_LITE_ENDPOINT_ID',
+    vendor: '字节跳动 · 火山方舟',
+  },
+  {
+    id: 'doubao-seed-2-pro',
+    shortLabel: '豆包',
+    fullName: 'Doubao-Seed-2.0-pro',
+    modelId: 'YOUR_PRO_ENDPOINT_ID',
     vendor: '字节跳动 · 火山方舟',
   },
 ]

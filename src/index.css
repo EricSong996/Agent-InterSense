@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import 'highlight.js/styles/github-dark.css';
+@import 'katex/dist/katex.min.css';
 
 html,
 body,
@@ -88,6 +89,22 @@ body {
   padding-left: 1.5em;
 }
 
+.markdown-body .katex-display-wrap,
+.markdown-body .katex-display {
+  margin: 0.75em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.markdown-body .katex {
+  font-size: 1.05em;
+  color: #ececec;
+}
+
+.markdown-body .katex-display > .katex {
+  text-align: center;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -96,4 +113,73 @@ body {
 ::-webkit-scrollbar-thumb {
   background: #4a4a4a;
   border-radius: 3px;
+}
+
+/* 侧栏聊天列表：GPT 风格细滚动条 */
+.sidebar-scroll {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.18);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.32);
+}
+
+.sidebar-scroll:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.28);
+}
+
+/* 输入框图片附件：豆包风格加载扫光 */
+.image-attach-chip--loading {
+  box-shadow: 0 0 0 1px rgba(16, 163, 127, 0.15);
+}
+
+.image-attach-shimmer {
+  background: linear-gradient(
+    105deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.12) 48%,
+    rgba(16, 163, 127, 0.2) 52%,
+    transparent 62%
+  );
+  background-size: 200% 100%;
+  animation: image-attach-shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes image-attach-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.image-attach-spinner {
+  animation: image-attach-spin 0.75s linear infinite;
+}
+
+@keyframes image-attach-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

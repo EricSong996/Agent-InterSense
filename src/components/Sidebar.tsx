@@ -1,16 +1,28 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChatSession } from '../types'
-import { SessionMenu } from './SessionMenu'
+import { BrandLogo } from './BrandLogo'
+import { SessionMenuButton } from './SessionMenuButton'
+import type { SessionMenuAnchor } from './SessionMenu'
 
 interface SidebarProps {
   sessions: ChatSession[]
   activeId: string | null
+  /** 移动端抽屉是否打开 */
   sidebarOpen: boolean
+  /** 桌面端是否收起（宽度动画） */
+  sidebarCollapsed: boolean
   onNewChat: () => void
   onSelect: (id: string) => void
-  onDelete: (id: string) => void
   onRename: (id: string, title: string) => void
   onReorder: (fromIndex: number, toIndex: number) => void
+  renamingId: string | null
+  sessionMenuSessionId: string | null
+  onOpenSessionMenu: (
+    sessionId: string,
+    el: HTMLElement,
+    placement?: SessionMenuAnchor['placement']
+  ) => void
+  onCancelRename: () => void
   onCloseMobile: () => void
 }
 
@@ -27,6 +39,37 @@ function IconSearch() {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <circle cx="11" cy="11" r="8" />
       <path d="m21 21-4.3-4.3" />
+    </svg>
+  )
+}
+
+function IconFolder() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4 8.25A2 2 0 0 1 6 6.25h3.1c.55 0 1.05.3 1.32.78l.83 1.22H18a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8.25Z"
+      />
+    </svg>
+  )
+}
+
+function IconChevron({ expanded }: { expanded: boolean }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      className={`shrink-0 text-[#8e8e8e] transition-transform duration-300 ease-in-out ${
+        expanded ? '' : '-rotate-90'
+      }`}
+      aria-hidden
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
     </svg>
   )
 }
@@ -48,22 +91,21 @@ export function Sidebar({
   sessions,
   activeId,
   sidebarOpen,
+  sidebarCollapsed,
   onNewChat,
   onSelect,
-  onDelete,
   onRename,
   onReorder,
+  renamingId,
+  sessionMenuSessionId,
+  onOpenSessionMenu,
+  onCancelRename,
   onCloseMobile,
 }: SidebarProps) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [chatsExpanded, setChatsExpanded] = useState(true)
   const [renameValue, setRenameValue] = useState('')
-  const [menuAnchor, setMenuAnchor] = useState<{
-    sessionId: string
-    top: number
-    left: number
-  } | null>(null)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dropIndex, setDropIndex] = useState<number | null>(null)
   const renameRef = useRef<HTMLInputElement>(null)
@@ -76,28 +118,22 @@ export function Sidebar({
   const idToIndex = new Map(sessions.map((s, i) => [s.id, i]))
 
   useEffect(() => {
-    if (renamingId && renameRef.current) {
-      renameRef.current.focus()
-      renameRef.current.select()
+    if (renamingId) {
+      const s = sessions.find((x) => x.id === renamingId)
+      setRenameValue(s?.title || '新对话')
+      if (renameRef.current) {
+        renameRef.current.focus()
+        renameRef.current.select()
+      }
+    } else {
+      setRenameValue('')
     }
-  }, [renamingId])
-
-  const openMenu = (sessionId: string, el: HTMLElement) => {
-    const rect = el.getBoundingClientRect()
-    setMenuAnchor({ sessionId, top: rect.top, left: rect.right })
-  }
-
-  const startRename = (s: ChatSession) => {
-    setMenuAnchor(null)
-    setRenamingId(s.id)
-    setRenameValue(s.title || '新对话')
-  }
+  }, [renamingId, sessions])
 
   const commitRename = () => {
     if (!renamingId) return
     const title = renameValue.trim() || '新对话'
     onRename(renamingId, title)
-    setRenamingId(null)
     setRenameValue('')
   }
 
@@ -147,14 +183,24 @@ export function Sidebar({
         />
       )}
       <aside
-        className={`fixed md:static z-30 flex h-full w-[260px] shrink-0 flex-col bg-[#171717] transition-transform duration-300 ease-in-out ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        className={`sidebar-panel fixed z-30 flex h-full shrink-0 flex-col overflow-hidden bg-[#171717] transition-[transform,width] duration-300 ease-in-out w-[260px] ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } md:static md:translate-x-0 ${
+          sidebarCollapsed ? 'md:w-0 md:border-r-0' : 'md:w-[260px] md:border-r md:border-[#2a2a2a]/80'
         }`}
       >
-        <div className="flex flex-col gap-1 p-3 pt-4">
-          <h1 className="brand-intersense px-2 pb-3 text-[1.35rem] text-[#ececec] select-none">
-            InterSense
-          </h1>
+        <div
+          className={`flex h-full w-[260px] flex-col transition-opacity duration-300 ease-in-out ${
+            sidebarCollapsed ? 'md:pointer-events-none md:opacity-0' : 'md:opacity-100'
+          }`}
+        >
+        <div className="flex shrink-0 flex-col gap-1 p-3 pt-3">
+          <div className="mb-2 flex h-10 items-center gap-2.5 px-1">
+            <BrandLogo />
+            <h1 className="brand-intersense text-[1.35rem] leading-none text-[#ececec] select-none">
+              InterSense
+            </h1>
+          </div>
 
           <button type="button" className={navBtn} onClick={onNewChat}>
             <IconNewChat />
@@ -187,13 +233,32 @@ export function Sidebar({
           )}
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-2 pb-2 pt-1">
-          {filtered.length === 0 && (
-            <p className="px-3 py-4 text-xs text-[#8e8e8e]">
-              {query ? '没有匹配的聊天' : '暂无历史对话'}
-            </p>
-          )}
-          <ul className="space-y-0.5">
+        <nav className="sidebar-scroll flex min-h-0 flex-1 flex-col px-3 pb-2 pt-1">
+          <button
+            type="button"
+            className={`${navBtn} mb-1`}
+            aria-expanded={chatsExpanded}
+            onClick={() => setChatsExpanded((e) => !e)}
+          >
+            <IconFolder />
+            <span className="min-w-0 flex-1 text-left">全部聊天</span>
+            <IconChevron expanded={chatsExpanded} />
+          </button>
+
+          <div
+            className={`grid min-h-0 transition-[grid-template-rows] duration-300 ease-in-out ${
+              chatsExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+            }`}
+          >
+            <div
+              className={`min-h-0 ${chatsExpanded ? 'overflow-visible' : 'overflow-hidden'}`}
+            >
+              {filtered.length === 0 && (
+                <p className="px-3 py-4 text-xs text-[#8e8e8e]">
+                  {query ? '没有匹配的聊天' : '暂无历史对话'}
+                </p>
+              )}
+              <ul className="space-y-0.5">
             {filtered.map((s) => {
               const realIndex = idToIndex.get(s.id) ?? 0
               const isDragging = dragIndex === realIndex
@@ -222,10 +287,7 @@ export function Sidebar({
                         onBlur={commitRename}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') commitRename()
-                          if (e.key === 'Escape') {
-                            setRenamingId(null)
-                            setRenameValue('')
-                          }
+                          if (e.key === 'Escape') onCancelRename()
                         }}
                         className="w-full rounded-md border border-[#4a4a4a] bg-[#212121] px-2 py-1.5 text-sm text-[#ececec] outline-none focus:border-[#6a6a6a]"
                       />
@@ -246,7 +308,6 @@ export function Sidebar({
                         onClick={() => {
                           onSelect(s.id)
                           onCloseMobile()
-                          setMenuAnchor(null)
                         }}
                       >
                         <span
@@ -255,49 +316,29 @@ export function Sidebar({
                         />
                         <span className="truncate">{s.title || '新对话'}</span>
                       </button>
-                      <button
-                        type="button"
-                        className="absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-[#8e8e8e] opacity-0 hover:bg-[#3a3a3a] hover:text-[#ececec] group-hover:opacity-100 transition-all duration-300"
-                        aria-label="更多操作"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (menuAnchor?.sessionId === s.id) {
-                            setMenuAnchor(null)
-                          } else {
-                            openMenu(s.id, e.currentTarget)
-                          }
-                        }}
-                      >
-                        ⋯
-                      </button>
+                      <SessionMenuButton
+                        showOnHover
+                        className={`absolute right-1 top-1/2 -translate-y-1/2 ${
+                          sessionMenuSessionId === s.id ? 'opacity-100' : ''
+                        }`}
+                        onClick={(e) => onOpenSessionMenu(s.id, e.currentTarget, 'above')}
+                      />
                     </div>
                   )}
                 </li>
               )
             })}
-          </ul>
+              </ul>
+            </div>
+          </div>
         </nav>
 
-        <div className="border-t border-[#2a2a2a]/80 p-3 text-[11px] text-[#6a6a6a]">
-          InterSense · 多模型对话
+        <div className="shrink-0 border-t border-[#2a2a2a]/80 p-3 text-[11px] text-[#6a6a6a]">
+          InterSense · 小宋同学出品
+        </div>
         </div>
       </aside>
 
-      {menuAnchor && (() => {
-        const target = sessions.find((x) => x.id === menuAnchor.sessionId)
-        if (!target) return null
-        return (
-          <SessionMenu
-            anchor={{ top: menuAnchor.top, left: menuAnchor.left }}
-            onClose={() => setMenuAnchor(null)}
-            onRename={() => startRename(target)}
-            onDelete={() => {
-              setMenuAnchor(null)
-              onDelete(target.id)
-            }}
-          />
-        )
-      })()}
     </>
   )
 }

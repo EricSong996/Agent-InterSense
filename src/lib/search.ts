@@ -1,4 +1,5 @@
 import { CONFIG } from '../config'
+import type { Message } from '../types'
 
 export interface SearchHit {
   title: string
@@ -34,9 +35,17 @@ function parseBochaResponse(json: unknown): SearchHit[] {
     .filter((h) => h.url || h.snippet)
 }
 
+type BochaFreshness =
+  | 'oneDay'
+  | 'oneWeek'
+  | 'oneMonth'
+  | 'oneYear'
+  | 'noLimit'
+
 export async function bochaWebSearch(
   query: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: { count?: number; freshness?: BochaFreshness }
 ): Promise<SearchHit[]> {
   const res = await fetch(CONFIG.bocha.baseUrl, {
     method: 'POST',
@@ -47,8 +56,8 @@ export async function bochaWebSearch(
     body: JSON.stringify({
       query,
       summary: true,
-      freshness: CONFIG.bocha.freshness,
-      count: CONFIG.bocha.count,
+      freshness: options?.freshness ?? CONFIG.bocha.freshness,
+      count: options?.count ?? CONFIG.bocha.count,
     }),
     signal,
   })
@@ -98,10 +107,10 @@ export function formatSearchContext(hits: SearchHit[]): string {
 }
 
 export function buildMessagesWithSearch(
-  history: Array<{ role: string; content: string }>,
+  history: Message[],
   userContent: string,
   searchContext: string
-): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
+): Message[] {
   const today = new Date().toLocaleDateString('zh-CN', {
     year: 'numeric',
     month: 'long',
@@ -120,11 +129,16 @@ export function buildMessagesWithSearch(
 ${searchContext}`
 
   return [
-    { role: 'system', content: systemContent },
-    ...history.map((m) => ({
-      role: m.role as 'user' | 'assistant' | 'system',
-      content: m.content,
-    })),
-    { role: 'user', content: userContent },
+    {
+      id: crypto.randomUUID(),
+      role: 'system',
+      content: systemContent,
+    },
+    ...history,
+    {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: userContent,
+    },
   ]
 }

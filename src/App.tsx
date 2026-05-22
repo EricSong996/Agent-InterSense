@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Provider } from './config'
 import { streamChat, checkApiKey } from './lib/api'
 import {
@@ -7,9 +7,21 @@ import {
   checkBochaKey,
   formatSearchContext,
 } from './lib/search'
-import { loadActiveId, loadSessions, saveActiveId, saveSessions } from './lib/storage'
-import type { ChatSession, Message } from './types'
+import {
+  loadActiveId,
+  loadSessions,
+  loadSidebarCollapsed,
+  saveActiveId,
+  saveSessions,
+  saveSidebarCollapsed,
+} from './lib/storage'
+import { SidebarToggle } from './components/SidebarToggle'
+import { messageHasImages } from './lib/images'
+import type { ChatSession, Message, MessageImage } from './types'
+import { SessionMenu, type SessionMenuAnchor } from './components/SessionMenu'
+import { SessionMenuButton } from './components/SessionMenuButton'
 import { Sidebar } from './components/Sidebar'
+import { sortSessions } from './lib/sessions'
 import { MessageBubble } from './components/MessageBubble'
 import { ChatInput } from './components/ChatInput'
 import { EmptyState } from './components/EmptyState'
@@ -20,12 +32,14 @@ function uid() {
   return crypto.randomUUID()
 }
 
-function titleFromMessage(text: string) {
+function titleFromMessage(text: string, hasImages?: boolean) {
   const t = text.trim().replace(/\s+/g, ' ')
-  return t.length > 24 ? `${t.slice(0, 24)}…` : t || '新对话'
+  if (t) return t.length > 24 ? `${t.slice(0, 24)}…` : t
+  if (hasImages) return '图片对话'
+  return '新对话'
 }
 
-function createSession(provider: Provider = 'deepseek'): ChatSession {
+function createSession(provider: Provider = 'deepseek-v4-flash'): ChatSession {
   const now = Date.now()
   return {
     id: uid(),
@@ -44,12 +58,25 @@ export default function App() {
   const [input, setInput] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => loadSidebarCollapsed())
+  const [sessionMenu, setSessionMenu] = useState<{
+    sessionId: string
+    anchor: SessionMenuAnchor
+  } | null>(null)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
+  )
   const [sessionBusy, setSessionBusy] = useState<Record<string, SessionBusy>>({})
   const abortBySession = useRef<Map<string, AbortController>>(new Map())
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  const activeSession = sessions.find((s) => s.id === activeId) ?? null
+  const sortedSessions = useMemo(() => sortSessions(sessions), [sessions])
+  const activeSession = sortedSessions.find((s) => s.id === activeId) ?? null
   const activeBusy = activeId ? sessionBusy[activeId] : undefined
+  const menuSession = sessionMenu
+    ? sortedSessions.find((s) => s.id === sessionMenu.sessionId)
+    : null
 
   const setBusy = useCallback((sessionId: string, state: SessionBusy | null) => {
     setSessionBusy((prev) => {
@@ -76,6 +103,13 @@ export default function App() {
   }, [activeId])
 
   useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const onChange = () => setIsDesktop(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [activeSession?.messages, activeBusy])
 
@@ -86,8 +120,21 @@ export default function App() {
     []
   )
 
+  const toggleSidebar = useCallback(() => {
+    const isDesktop = window.matchMedia('(min-width: 768px)').matches
+    if (isDesktop) {
+      setSidebarCollapsed((c) => {
+        const next = !c
+        saveSidebarCollapsed(next)
+        return next
+      })
+    } else {
+      setSidebarOpen((o) => !o)
+    }
+  }, [])
+
   const handleNewChat = () => {
-    const s = createSession(activeSession?.provider ?? 'deepseek')
+    const s = createSession(activeSession?.provider ?? 'deepseek-v4-flash')
     setSessions((prev) => [s, ...prev])
     setActiveId(s.id)
     setInput('')
@@ -104,6 +151,8 @@ export default function App() {
     abortBySession.current.get(id)?.abort()
     abortBySession.current.delete(id)
     setBusy(id, null)
+    setSessionMenu((m) => (m?.sessionId === id ? null : m))
+    setRenamingId((r) => (r === id ? null : r))
     setSessions((prev) => {
       const next = prev.filter((s) => s.id !== id)
       if (activeId === id) {
@@ -115,12 +164,57 @@ export default function App() {
   }
 
   const handleRename = (id: string, title: string) => {
-    updateSession(id, (s) => ({ ...s, title, updatedAt: Date.now() }))
+    updateSession(id, (s) => ({
+      ...s,
+      title,
+      titleUserSet: true,
+      updatedAt: Date.now(),
+    }))
+    setRenamingId(null)
+  }
+
+  const handlePin = (id: string) => {
+    setSessions((prev) =>
+      sortSessions(
+        prev.map((s) => {
+          if (s.id !== id) return s
+          const pinned = !s.pinned
+          return {
+            ...s,
+            pinned,
+            pinnedAt: pinned ? Date.now() : undefined,
+            updatedAt: Date.now(),
+          }
+        })
+      )
+    )
+    setSessionMenu(null)
+  }
+
+  const openSessionMenu = (
+    sessionId: string,
+    el: HTMLElement,
+    placement: SessionMenuAnchor['placement'] = 'above'
+  ) => {
+    const rect = el.getBoundingClientRect()
+    setSessionMenu((prev) => {
+      if (prev?.sessionId === sessionId) return null
+      return {
+        sessionId,
+        anchor: {
+          top: rect.top,
+          left: rect.right,
+          height: rect.height,
+          placement,
+        },
+      }
+    })
   }
 
   const handleReorder = (fromIndex: number, toIndex: number) => {
     setSessions((prev) => {
-      const next = [...prev]
+      const sorted = sortSessions(prev)
+      const next = [...sorted]
       const [removed] = next.splice(fromIndex, 1)
       next.splice(toIndex, 0, removed)
       return next
@@ -134,7 +228,7 @@ export default function App() {
 
   const handleWebSearchChange = (enabled: boolean) => {
     if (!activeId) {
-      const s = createSession(activeSession?.provider ?? 'deepseek')
+      const s = createSession(activeSession?.provider ?? 'deepseek-v4-flash')
       s.webSearch = enabled
       setSessions((prev) => [s, ...prev])
       setActiveId(s.id)
@@ -146,31 +240,25 @@ export default function App() {
   const resolveMessagesForApi = async (
     sessionId: string,
     history: Message[],
-    userContent: string,
+    userMsg: Message,
     webSearch: boolean,
     signal: AbortSignal
   ): Promise<Message[]> => {
-    if (!webSearch) {
-      return [...history, { id: uid(), role: 'user', content: userContent }]
+    if (!webSearch || messageHasImages(userMsg)) {
+      return [...history, userMsg]
     }
+
+    const query = userMsg.content.trim()
+    if (!query) return [...history, userMsg]
 
     const bochaErr = checkBochaKey()
     if (bochaErr) throw new Error(bochaErr)
 
     setBusy(sessionId, 'searching')
     try {
-      const hits = await bochaWebSearch(userContent, signal)
+      const hits = await bochaWebSearch(query, signal)
       const context = formatSearchContext(hits)
-      const built = buildMessagesWithSearch(
-        history.map((m) => ({ role: m.role, content: m.content })),
-        userContent,
-        context
-      )
-      return built.map((m) => ({
-        id: uid(),
-        role: m.role,
-        content: m.content,
-      }))
+      return buildMessagesWithSearch(history, query, context)
     } finally {
       setBusy(sessionId, null)
     }
@@ -241,12 +329,11 @@ export default function App() {
     }))
 
     try {
-      const userContent = last.content
       const msgsForApi = await resolveMessagesForApi(
         activeId,
         history.slice(0, -1),
-        userContent,
-        activeSession.webSearch,
+        last,
+        activeSession.webSearch && !messageHasImages(last),
         signal
       )
       await streamAssistantReply(
@@ -263,15 +350,16 @@ export default function App() {
     }
   }
 
-  const sendMessage = async (text: string) => {
-    const trimmed = text.trim()
-    if (!trimmed) return
+  const sendMessage = async (payload: { text: string; images: MessageImage[] }) => {
+    const trimmed = payload.text.trim()
+    const images = payload.images
+    if (!trimmed && images.length === 0) return
 
     let sessionId = activeId
     let session = activeSession
 
     if (!session) {
-      const s = createSession('deepseek')
+      const s = createSession('deepseek-v4-flash')
       setSessions((prev) => [s, ...prev])
       setActiveId(s.id)
       sessionId = s.id
@@ -288,16 +376,24 @@ export default function App() {
     }
 
     setError(null)
-    setInput('')
 
-    const userMsg: Message = { id: uid(), role: 'user', content: trimmed }
+    const userMsg: Message = {
+      id: uid(),
+      role: 'user',
+      content: trimmed,
+      ...(images.length > 0 ? { images } : {}),
+    }
     const assistantId = uid()
+    const useWebSearch = session!.webSearch && !messageHasImages(userMsg)
 
     updateSession(sessionId!, (s) => {
       const isFirst = s.messages.length === 0
       return {
         ...s,
-        title: isFirst ? titleFromMessage(trimmed) : s.title,
+        title:
+          isFirst && !s.titleUserSet
+            ? titleFromMessage(trimmed, images.length > 0)
+            : s.title,
         messages: [
           ...s.messages,
           userMsg,
@@ -313,8 +409,8 @@ export default function App() {
       const msgsForApi = await resolveMessagesForApi(
         sessionId!,
         session!.messages,
-        trimmed,
-        session!.webSearch,
+        userMsg,
+        useWebSearch,
         signal
       )
       await streamAssistantReply(
@@ -335,34 +431,55 @@ export default function App() {
 
   const messages = activeSession?.messages ?? []
   const showEmpty = messages.length === 0 && !activeBusy
+  const sidebarExpanded = isDesktop ? !sidebarCollapsed : sidebarOpen
 
   return (
     <div className="flex h-full bg-[#212121] text-[#ececec]">
       <Sidebar
-        sessions={sessions}
+        sessions={sortedSessions}
         activeId={activeId}
         sidebarOpen={sidebarOpen}
+        sidebarCollapsed={sidebarCollapsed}
+        renamingId={renamingId}
+        sessionMenuSessionId={sessionMenu?.sessionId ?? null}
         onNewChat={handleNewChat}
         onSelect={handleSelect}
-        onDelete={handleDelete}
         onRename={handleRename}
         onReorder={handleReorder}
+        onOpenSessionMenu={openSessionMenu}
+        onCancelRename={() => setRenamingId(null)}
         onCloseMobile={() => setSidebarOpen(false)}
       />
 
       <main className="relative flex min-w-0 flex-1 flex-col bg-[#212121]">
-        <header className="absolute left-0 right-0 top-0 z-10 flex h-12 items-center px-3 pointer-events-none">
-          <button
-            type="button"
-            className="pointer-events-auto rounded-lg p-2 text-[#ececec] hover:bg-[#2a2a2a] md:hidden transition-colors duration-300"
-            aria-label="打开菜单"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z" />
-            </svg>
-          </button>
+        <header className="flex h-12 shrink-0 items-center justify-between border-b border-[#2a2a2a]/60 px-3">
+          <SidebarToggle
+            collapsed={!sidebarExpanded}
+            onClick={toggleSidebar}
+          />
+          {activeId && activeSession && (
+            <SessionMenuButton
+              onClick={(e) => openSessionMenu(activeId, e.currentTarget, 'below')}
+            />
+          )}
         </header>
+
+        {sessionMenu && menuSession && (
+          <SessionMenu
+            anchor={sessionMenu.anchor}
+            pinned={menuSession.pinned}
+            onPin={() => handlePin(menuSession.id)}
+            onRename={() => {
+              setSessionMenu(null)
+              setRenamingId(menuSession.id)
+            }}
+            onDelete={() => {
+              setSessionMenu(null)
+              handleDelete(menuSession.id)
+            }}
+            onClose={() => setSessionMenu(null)}
+          />
+        )}
 
         {error && (
           <div className="mx-4 mt-3 rounded-lg border border-red-800/50 bg-red-950/40 px-4 py-2 text-sm text-red-300">
@@ -375,7 +492,7 @@ export default function App() {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto pt-2">
+        <div className="flex-1 overflow-y-auto">
           {showEmpty ? (
             <EmptyState onSuggestion={(t) => setInput(t)} />
           ) : (
@@ -408,14 +525,17 @@ export default function App() {
         </div>
 
         <ChatInput
+          key={activeId ?? 'new'}
+          sessionKey={activeId}
           value={input}
           sendDisabled={!!activeBusy}
           webSearch={activeSession?.webSearch ?? false}
           onWebSearchChange={handleWebSearchChange}
           onChange={setInput}
-          onSend={() => sendMessage(input)}
+          onSend={sendMessage}
+          onImageError={setError}
           onProviderChange={handleProviderChange}
-          provider={activeSession?.provider ?? 'deepseek'}
+          provider={activeSession?.provider ?? 'deepseek-v4-flash'}
         />
       </main>
     </div>

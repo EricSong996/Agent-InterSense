@@ -1,27 +1,59 @@
 import { CONFIG, type Provider } from '../config'
+import { defaultImagePrompt, messageHasImages } from './images'
 import type { Message } from '../types'
 
 function getProviderConfig(provider: Provider) {
   return CONFIG[provider]
 }
 
+function isDeepseekProvider(provider: Provider): boolean {
+  return provider === 'deepseek-v4-flash' || provider === 'deepseek-v4-pro'
+}
+
+function isDoubaoProvider(provider: Provider): boolean {
+  return provider === 'doubao' || provider === 'doubao-seed-2-pro'
+}
+
 function isConfigured(provider: Provider): boolean {
   const c = getProviderConfig(provider)
   const key = String(c.apiKey)
   const model = String(c.model)
-  if (provider === 'deepseek') {
+  if (isDeepseekProvider(provider)) {
     return key.length > 0 && !key.startsWith('YOUR_')
   }
-  return key.length > 0 && !key.startsWith('YOUR_') && model.startsWith('ep-')
+  if (isDoubaoProvider(provider)) {
+    return key.length > 0 && !key.startsWith('YOUR_') && model.startsWith('ep-')
+  }
+  return false
 }
 
 export function checkApiKey(provider: Provider): string | null {
   if (!isConfigured(provider)) {
-    return provider === 'deepseek'
+    return isDeepseekProvider(provider)
       ? '请在 src/config.ts 中填写 DeepSeek API Key'
       : '请在 src/config.ts 中填写豆包 API Key 与接入点 ID'
   }
   return null
+}
+
+type ApiContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } }
+
+export function messageToApiContent(m: Message): string | ApiContentPart[] {
+  const images = m.images ?? []
+  if (images.length === 0) return m.content
+
+  const parts: ApiContentPart[] = []
+  const text = m.content.trim()
+  if (text) parts.push({ type: 'text', text })
+  for (const img of images) {
+    parts.push({ type: 'image_url', image_url: { url: img.dataUrl } })
+  }
+  if (parts.length === 0) {
+    parts.push({ type: 'text', text: defaultImagePrompt() })
+  }
+  return parts
 }
 
 export async function streamChat(
@@ -36,8 +68,11 @@ export async function streamChat(
   const body = {
     model: cfg.model,
     messages: messages
-      .filter((m) => m.role !== 'system' || m.content.trim())
-      .map((m) => ({ role: m.role, content: m.content })),
+      .filter((m) => m.role !== 'system' || m.content.trim() || messageHasImages(m))
+      .map((m) => ({
+        role: m.role,
+        content: messageToApiContent(m),
+      })),
     stream: true,
   }
 
