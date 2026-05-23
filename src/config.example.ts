@@ -30,7 +30,7 @@ export const CONFIG = {
     model: 'ep-20260521203639-qbvlc',
   },
   bocha: {
-    apiKey: 'YOUR_BOCHA_API_KEY',
+    apiKey: 'sk-707cf5e368c4495fb96317198af53439',
     baseUrl: 'https://api.bochaai.com/v1/web-search',
     count: 8,
     freshness: 'oneMonth' as
