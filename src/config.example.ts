@@ -8,7 +8,7 @@ const DEEPSEEK_SHARED = {
 } as const
 
 const DOUBAO_SHARED = {
-  apiKey: 'YOUR_DOUBAO_API_KEY',
+  apiKey: 'ark-ef997cce-38de-4233-b010-62254222f968-aa618',
   baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
 } as const
 
