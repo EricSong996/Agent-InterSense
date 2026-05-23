@@ -27,7 +27,7 @@ export const CONFIG = {
   },
   'doubao-seed-2-pro': {
     ...DOUBAO_SHARED,
-    model: 'YOUR_PRO_ENDPOINT_ID',
+    model: 'ep-20260521203639-qbvlc',
   },
   bocha: {
     apiKey: 'YOUR_BOCHA_API_KEY',
