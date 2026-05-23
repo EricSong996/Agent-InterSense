@@ -73,7 +73,7 @@ export function ModelSelector({ provider, onChange }: ModelSelectorProps) {
         <span className="flex min-w-0 flex-col pointer-events-none">
           <span className="text-sm font-medium text-[#ececec]">{current.fullName}</span>
           <span className="text-[11px] text-[#8e8e8e] truncate max-w-[220px] sm:max-w-[280px]">
-            {current.vendor} · {current.modelId}
+            {current.vendor} 
           </span>
         </span>
         <IconChevron open={open} />
@@ -121,7 +121,6 @@ export function ModelSelector({ provider, onChange }: ModelSelectorProps) {
                     )}
                   </span>
                   <span className="mt-0.5 text-[11px] text-[#8e8e8e]">{p.vendor}</span>
-                  <span className="mt-0.5 font-mono text-[10px] text-[#6a6a6a]">{p.modelId}</span>
                 </button>
               )
             })}
