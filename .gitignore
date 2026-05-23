@@ -12,9 +12,6 @@ dist
 dist-ssr
 *.local
 
-# 含 API Key，勿提交（本地保留 config.ts）
-src/config.ts
-
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
