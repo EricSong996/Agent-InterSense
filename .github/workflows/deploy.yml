@@ -24,7 +24,6 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: cp src/config.example.ts src/config.ts
       - run: npm run build
         env:
           GITHUB_PAGES: 'true'
