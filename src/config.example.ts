@@ -23,7 +23,7 @@ export const CONFIG = {
   },
   doubao: {
     ...DOUBAO_SHARED,
-    model: 'YOUR_LITE_ENDPOINT_ID',
+    model: 'ep-20260520210121-c6jmk',
   },
   'doubao-seed-2-pro': {
     ...DOUBAO_SHARED,
