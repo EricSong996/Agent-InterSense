@@ -3,7 +3,7 @@
  *   copy config.example.ts config.ts   (Windows PowerShell)
  */
 const DEEPSEEK_SHARED = {
-  apiKey: 'YOUR_DEEPSEEK_API_KEY',
+  apiKey: 'sk-c4d7cf6068cc4908a077bab3614a9350',
   baseUrl: 'https://api.deepseek.com',
 } as const
 
