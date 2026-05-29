@@ -3,8 +3,8 @@
  * 豆包 model 填火山方舟控制台创建的「推理接入点 ID」
  */
 const DEEPSEEK_SHARED = {
-  apiKey: 'sk-c4d7cf6068cc4908a077bab3614a9350',
-  baseUrl: 'https://api.deepseek.com',
+  apiKey: 'ark-ef997cce-38de-4233-b010-62254222f968-aa618',
+  baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
 } as const
 
 const DOUBAO_SHARED = {
@@ -15,11 +15,11 @@ const DOUBAO_SHARED = {
 export const CONFIG = {
   'deepseek-v4-flash': {
     ...DEEPSEEK_SHARED,
-    model: 'deepseek-v4-flash',
+    model: 'ep-20260529231454-52v6k',
   },
   'deepseek-v4-pro': {
     ...DEEPSEEK_SHARED,
-    model: 'deepseek-v4-pro',
+    model: 'ep-20260529233017-hdt4q',
   },
   doubao: {
     ...DOUBAO_SHARED,
