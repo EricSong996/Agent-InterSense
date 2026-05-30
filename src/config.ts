@@ -69,14 +69,14 @@ export const PROVIDER_META: ProviderMeta[] = [
     id: 'deepseek-v4-flash',
     shortLabel: 'DeepSeek',
     fullName: 'DeepSeek V4 Flash',
-    modelId: 'deepseek-v4-flash',
+    modelId: 'ep-20260529231454-52v6k',
     vendor: '深度求索 DeepSeek',
   },
   {
     id: 'deepseek-v4-pro',
     shortLabel: 'DeepSeek',
     fullName: 'DeepSeek V4 Pro',
-    modelId: 'deepseek-v4-pro',
+    modelId: 'ep-20260529233017-hdt4q',
     vendor: '深度求索 DeepSeek',
   },
   {
