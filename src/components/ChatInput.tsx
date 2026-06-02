@@ -219,9 +219,7 @@ export function ChatInput({
                   ? '当前对话生成中，可切换其他聊天继续输入…'
                   : hasImages
                     ? '描述你的问题，例如：解这道数学题…'
-                    : webSearch
-                      ? '输入问题，将先通过博查联网检索…'
-                      : '有问题尽管问，可直接粘贴图片'
+                    : '有问题尽管问，可直接粘贴图片'
               }
               rows={1}
               className="max-h-[200px] min-h-[52px] flex-1 resize-none bg-transparent px-4 py-4 text-[15px] text-[#ececec] placeholder:text-[#8e8e8e] outline-none"
@@ -252,9 +250,7 @@ export function ChatInput({
                   ? visionUnsupportedHint(provider)
                   : hasImages
                     ? '已添加图片 · 拍题请尽量使用豆包 Seed 2.0 模型'
-                    : webSearch
-                      ? '已开启博查联网 · 回答将参考检索结果'
-                      : 'InterSense 可能会犯错，请核查重要信息'}
+                    : 'InterSense 可能会犯错，请核查重要信息'}
         </p>
       </div>
     </div>
